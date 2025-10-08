@@ -20,8 +20,8 @@
         .tox-tinymce { border-radius: 0.5rem !important; }
         #analysis-results { min-height: 400px; }
     </style>
-    <!-- Load TinyMCE (Rich Text Editor) with your API key -->
-    <script src="https://cdn.tiny.cloud/1/t19ko08ga6ci2uk2ityy6relkcseldfxoiepkuq5frjplt8a/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+    <!-- Load TinyMCE (Rich Text Editor) without API key for general domain use -->
+    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 <body class="p-4 sm:p-8">
 
@@ -119,10 +119,18 @@
             <h2>Semantic Coverage: The Future of Ranking</h2>
             <p>A detailed comparison between the old ranking signals and the current, semantics-focused systems is critical for any writer. The implications of the SpamBrain system are far-reaching. This article is current as of 2024. <a href="#">[Internal Link]</a></p>
         `;
+        
+        // **DEFENSIVE FIX ADDED HERE:** Ensure the element is not read-only before initialization.
+        document.addEventListener('DOMContentLoaded', () => {
+             const editorElement = document.getElementById('content-editor');
+             if (editorElement) {
+                 editorElement.removeAttribute('readonly');
+             }
+        });
+
 
         tinymce.init({
             selector: '#content-editor',
-            api_key: 't19ko08ga6ci2uk2ityy6relkcseldfxoiepkuq5frjplt8a', // **API Key Added Here**
             height: 500,
             setup: function(ed) {
                 ed.on('init', function() {
