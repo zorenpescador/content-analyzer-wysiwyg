@@ -20,8 +20,8 @@
         .tox-tinymce { border-radius: 0.5rem !important; }
         #analysis-results { min-height: 400px; }
     </style>
-    <!-- Load TinyMCE (Rich Text Editor) -->
-    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+    <!-- Load TinyMCE (Rich Text Editor) with your API key -->
+    <script src="https://cdn.tiny.cloud/1/t19ko08ga6ci2uk2ityy6relkcseldfxoiepkuq5frjplt8a/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
 </head>
 <body class="p-4 sm:p-8">
 
@@ -122,6 +122,7 @@
 
         tinymce.init({
             selector: '#content-editor',
+            api_key: 't19ko08ga6ci2uk2ityy6relkcseldfxoiepkuq5frjplt8a', // **API Key Added Here**
             height: 500,
             setup: function(ed) {
                 ed.on('init', function() {
@@ -133,7 +134,7 @@
             toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft alignaligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
             branding: false,
             menubar: false,
-            readonly: false, // Explicitly set readonly to false to fix the error
+            readonly: false, 
         });
 
         // --- CORE ANALYSIS LOGIC (HTML/JS) ---
