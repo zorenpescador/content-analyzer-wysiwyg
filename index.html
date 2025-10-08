@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WYSIWYG Content Quality Analyzer</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom Styles to match the Streamlit aesthetic */
+        body { font-family: 'Inter', sans-serif; background-color: #f7f9fc; }
+        .score-card { transition: transform 0.2s; }
+        .score-card:hover { transform: translateY(-3px); }
+        .score-value { font-size: 2rem; font-weight: 700; color: #1A73E8; }
+        .section-header { border-bottom: 2px solid #e0e0e0; margin-top: 1.5rem; padding-bottom: 5px; }
+        .priority-item { background-color: #FCE8E6; border-left: 4px solid #EA4335; padding: 8px; margin-bottom: 4px; border-radius: 4px; font-weight: 500; }
+        .positive-cue { color: #0D723C; }
+        .missing-signal { color: #A60000; }
+        /* Ensure TinyMCE is styled correctly */
+        .tox-tinymce { border-radius: 0.5rem !important; }
+        #analysis-results { min-height: 400px; }
+    </style>
+    <!-- Load TinyMCE (Rich Text Editor) -->
+    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/6/tinymce.min.js" referrerpolicy="origin"></script>
+</head>
+<body class="p-4 sm:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-extrabold text-[#1A73E8] mb-6 border-b pb-2">WYSIWYG Content Quality Analyzer</h1>
+        <p class="text-gray-600 mb-6">Edit your content visually below. The analyzer will parse the HTML structure (e.g., `<h2>` tags) to provide ranking insights.</p>
+
+        <!-- Control Panel -->
+        <div class="mb-6 p-4 bg-white rounded-xl shadow-lg flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
+            <div class="w-full md:w-1/2">
+                <label for="target-keyword" class="block text-sm font-medium text-gray-700">Target Keyword/Phrase</label>
+                <input type="text" id="target-keyword" value="Google Ranking Systems" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm p-2 border">
+            </div>
+            <div class="w-full md:w-1/2 flex items-center justify-end md:mt-5">
+                <button onclick="runAnalysis()" id="analyze-button" class="w-full md:w-auto px-6 py-2 bg-[#4285F4] text-white font-semibold rounded-lg shadow-md hover:bg-[#3b78d8] transition duration-200">
+                    Run Comprehensive Analysis
+                </button>
+            </div>
+        </div>
+
+        <!-- Content Editor -->
+        <div class="mb-8">
+            <label class="block text-lg font-semibold text-gray-800 mb-2">1. Content Editor (WYSIWYG)</label>
+            <textarea id="content-editor" style="height: 400px;"></textarea>
+        </div>
+
+        <!-- Analysis Results -->
+        <div id="analysis-results" class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-[#4285F4]">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">Analysis Report</h2>
+            <div id="results-placeholder" class="text-gray-500 italic">Click 'Run Comprehensive Analysis' to see the report.</div>
+            
+            <div id="score-summary" class="hidden">
+                <div id="score-cards-row" class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                    <!-- Score cards will be inserted here -->
+                </div>
+
+                <h3 class="text-xl font-semibold section-header mb-4">3. 🎯 Priority Actions List</h3>
+                <div id="priority-list"></div>
+                <div class="my-4 border-t pt-4"></div>
+
+                <!-- Detailed Section Analysis -->
+                <div id="detailed-analysis"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ANALYSIS CONSTANTS (Translated from Python) ---
+        const EEAT_MAX_SCORE = 45;
+        const KEYWORD_MAX_SCORE = 20;
+        const INTEGRITY_MAX_SCORE = 20;
+        const TECH_MAX_SCORE = 15;
+
+        const EEAT_TRUST_KEYWORDS = [
+            "author:", "cited", "sources", "data suggests", "peer-reviewed", "methodology", "disclosure"
+        ];
+        const EEAT_EXPERIENCE_KEYWORDS = [
+            "i found that", "after using", "i discovered", "original analysis", "hands-on", "i tested", "first-hand"
+        ];
+        const UTILITY_KEYWORDS = [
+            "step-by-step", "how to", "tutorial", "actionable", "comprehensive", "guide", "in-depth"
+        ];
+        const SEMANTIC_CUES = [
+            "alternatives", "pros and cons", "case study", "future of", "implications", "history of", "comparison"
+        ];
+        
+        const KEYWORD_DENSITY_TARGET = [0.5, 2.5]; 
+        const KEYWORD_PLACEMENT_LENGTH = 150; 
+
+        const SPAMMY_KEYWORDS = [
+            "buy now", "click here", "unbeatable deal", "limited time offer", "guaranteed", "cash back", "instant access"
+        ];
+        const REPETITIVE_PHRASES = [
+            "very good article", "is a great product", "fantastic opportunity", "the best thing" 
+        ];
+        const AI_DISCLOSURE_KEYWORDS = [
+            "ai-generated", "ai writer", "automated content", "llm", "model-assisted"
+        ];
+        const MIN_WORD_COUNT = 300;
+
+        const FRESHNESS_KEYWORDS = ["updated:", "current as of", "latest research", "recent changes"];
+        
+        // --- TINYMCE INITIALIZATION ---
+        let editor;
+
+        const PLACEHOLDER_HTML = `
+            <h2>The Essential Guide to Ranking Systems (Updated: 2024)</h2>
+            <p><strong>Author: Dr. Jenna Smith, Ph.D. in Computer Science</strong></p>
+            <h3>Understanding the Core Systems: Pros and Cons</h3>
+            <p>I found that after rigorous testing on over 100 pages, the single most critical factor is the application of the Experience (E) component of E-E-A-T. In my experience, content must demonstrate original insights.</p>
+            <p>Why is this level of detail important? The reason is that Google’s Helpful Content System penalizes content that lacks original value. <a href="#">[Internal Link]</a></p>
+            <h2>Building Trust and Authority</h2>
+            <p>The Trustworthiness (T) mandate requires clear sourcing. We have cited 12 different external sources to back up our claims. This provides strong confidence to the reader and signals high Expertise (E) to the system.</p>
+            <p><a href="#">[External Link]</a></p>
+            <h2>Semantic Coverage: The Future of Ranking</h2>
+            <p>A detailed comparison between the old ranking signals and the current, semantics-focused systems is critical for any writer. The implications of the SpamBrain system are far-reaching. This article is current as of 2024. <a href="#">[Internal Link]</a></p>
+        `;
+
+        tinymce.init({
+            selector: '#content-editor',
+            height: 500,
+            setup: function(ed) {
+                ed.on('init', function() {
+                    ed.setContent(PLACEHOLDER_HTML);
+                    editor = ed;
+                });
+            },
+            plugins: 'advlist autolink lists link charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime table help wordcount',
+            toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft alignaligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
+            branding: false,
+            menubar: false,
+            readonly: false, // Explicitly set readonly to false to fix the error
+        });
+
+        // --- CORE ANALYSIS LOGIC (HTML/JS) ---
+
+        function getEditorContent() {
+            if (!editor) return { html: '', text: '' };
+            const html = editor.getContent();
+            const text = editor.getContent({ format: 'text' }).toLowerCase();
+            return { html, text };
+        }
+
+        function countWords(text) {
+            return text.match(/\b\w+\b/g)?.length || 0;
+        }
+        
+        function calculateReadingEase(text) {
+            // Re-using the JS version of the calculation
+            const sentences = text.match(/[.!?]+|$/g) || [];
+            const words = text.match(/\b\w+\b/g) || [];
+            let syllables = 0;
+
+            words.forEach(word => {
+                syllables += word.toLowerCase().match(/[aeiouy]+/g)?.length || 0;
+            });
+            
+            const numWords = words.length;
+            const numSentences = sentences.length;
+
+            if (numWords === 0 || numSentences === 0) return { score: 100, grade: "N/A" };
+
+            const ASL = numWords / numSentences; 
+            const ASW = syllables / numWords; 
+            
+            let score = 206.835 - 1.015 * ASL - 84.6 * ASW;
+            score = Math.max(0, Math.min(100, score));
+
+            let grade = "Complex (Post-Graduate)";
+            if (score >= 60) grade = "Fairly Easy (8th-9th Grade)";
+            if (score >= 70) grade = "Easy (6th-7th Grade)";
+            if (score >= 80) grade = "Very Easy (5th Grade)";
+
+            return { score, grade };
+        }
+
+        function analyzeContent(htmlContent, plainText, targetKeyword) {
+            const findings = {
+                priority_actions: [],
+                eeat: { score: 0, cues: [], missing: [], max: EEAT_MAX_SCORE },
+                keyword: { score: 0, cues: [], missing: [], max: KEYWORD_MAX_SCORE },
+                integrity: { score: 0, cues: [], missing: [], max: INTEGRITY_MAX_SCORE },
+                technical: { score: 0, cues: [], missing: [], max: TECH_MAX_SCORE },
+            };
+            const wordCount = countWords(plainText);
+            const lowerContent = plainText.toLowerCase();
+            const paragraphs = plainText.split('\n').filter(p => p.trim() !== '');
+
+            // Helper function to add missing signals
+            const addMissing = (sectionKey, signal, priority = false) => {
+                findings[sectionKey].missing.push(signal);
+                if (priority) findings.priority_actions.push(signal);
+            };
+
+            // --- 1. E-E-A-T & Utility Analysis (Max 45 Pts) ---
+            let eeatScore = 0;
+            let eeatCues = 0;
+            
+            // Experience & Trust (HTML Check: Look for Bold/Strong tags near cues)
+            const experienceFound = EEAT_EXPERIENCE_KEYWORDS.some(k => lowerContent.includes(k));
+            const trustFound = EEAT_TRUST_KEYWORDS.some(k => lowerContent.includes(k));
+            
+            if (experienceFound) {
+                findings.eeat.cues.push("Found Experience cues (e.g., 'I tested').");
+                eeatScore += 10;
+            } else {
+                addMissing('eeat', "No clear **first-hand experience** signals.", true);
+            }
+
+            if (trustFound) {
+                findings.eeat.cues.push("Found Trust cues (e.g., 'cited sources', 'methodology').");
+                eeatScore += 10;
+            } else {
+                addMissing('eeat', "No clear **trust signals** (e.g., 'cited sources').", true);
+            }
+
+            // Semantic Coverage
+            const semanticCount = SEMANTIC_CUES.filter(k => lowerContent.includes(k)).length;
+            if (semanticCount >= 3) {
+                findings.eeat.cues.push(`Strong **Semantic Coverage** detected (${semanticCount} subtopics).`);
+                eeatScore += 15;
+            } else if (semanticCount >= 1) {
+                eeatScore += 7;
+            } else {
+                addMissing('eeat', "Missing strong **Semantic Coverage**. Explore related subtopics (e.g., 'Alternatives', 'Pros & Cons').", true);
+            }
+            
+            // Author/Expertise (Looking for explicit text in the first paragraph)
+            if (paragraphs.length > 0 && paragraphs[0].toLowerCase().includes('author:')) {
+                findings.eeat.cues.push("Found clear **Author/Expert** declaration in the introduction.");
+                eeatScore += 10;
+            } else {
+                addMissing('eeat', "No visible **Author/Expert** declaration.", true);
+            }
+
+
+            findings.eeat.score = Math.min(EEAT_MAX_SCORE, eeatScore);
+
+
+            // --- 2. Keyword Relevance & Placement Analysis (Max 20 Pts) ---
+            let keywordScore = 0;
+            const keywordMentions = (lowerContent.match(new RegExp(targetKeyword.toLowerCase(), 'g')) || []).length;
+
+            // Density (10 pts)
+            if (wordCount > 0) {
+                const density = (keywordMentions / wordCount) * 100;
+                findings.keyword.cues.push(`Keyword Density: ${density.toFixed(2)}% (${keywordMentions} mentions). Target: 0.5% - 2.5%.`);
+                if (density >= KEYWORD_DENSITY_TARGET[0] && density <= KEYWORD_DENSITY_TARGET[1]) {
+                    keywordScore += 10;
+                } else if (density < KEYWORD_DENSITY_TARGET[0]) {
+                    addMissing('keyword', `Keyword density is too low (${density.toFixed(2)}%).`, true);
+                    keywordScore += 5;
+                } else {
+                    addMissing('keyword', `Keyword density is too high (${density.toFixed(2)}%). Potential for stuffing.`, true);
+                    keywordScore += 2;
+                }
+            }
+
+            // Placement (HTML Check: H1 tag for Title, and first <p> for Intro) (10 pts)
+            const h1Found = htmlContent.includes('<h1>') && lowerContent.includes(targetKeyword.toLowerCase());
+            const introFound = paragraphs[0]?.toLowerCase().includes(targetKeyword.toLowerCase());
+            
+            if (h1Found) {
+                findings.keyword.cues.push("Keyword found in the **Title/H1**.");
+                keywordScore += 4;
+            } else {
+                addMissing('keyword', "Keyword missing from the **Title/H1**.", true);
+            }
+
+            if (introFound) {
+                 findings.keyword.cues.push("Keyword found in the **Introduction**.");
+                 keywordScore += 4;
+            } else {
+                 addMissing('keyword', "Keyword missing from the **Introduction**.", true);
+            }
+
+            // Conclusion check (simple last paragraph check)
+            if (paragraphs.length > 1 && paragraphs[paragraphs.length - 1].toLowerCase().includes(targetKeyword.toLowerCase())) {
+                findings.keyword.cues.push("Keyword found in the **Conclusion**.");
+                keywordScore += 2;
+            } else {
+                addMissing('keyword', "Keyword missing from the **Conclusion**.", false);
+            }
+            
+            findings.keyword.score = Math.min(KEYWORD_MAX_SCORE, keywordScore);
+
+
+            // --- 3. Integrity & Compliance (SpamBrain) (Max 20 Pts) ---
+            let integrityScore = 20;
+            let penaltyCount = 0;
+
+            // Spammy Language Penalty (5 pts)
+            const spamCount = SPAMMY_KEYWORDS.filter(k => lowerContent.includes(k)).length;
+            if (spamCount > 0) {
+                integrityScore -= 5;
+                penaltyCount += 1;
+                addMissing('integrity', `Excessive commercial/spammy language detected (${spamCount} cues).`, true);
+            } else {
+                findings.integrity.cues.push("Clean language: No excessive commercial/spammy cues found.");
+            }
+
+            // Repetitive/Formulaic Penalty (5 pts)
+            const repetitiveCount = REPETITIVE_PHRASES.filter(phrase => {
+                // Check if phrase is repeated more than once
+                return (lowerContent.match(new RegExp(phrase, 'g')) || []).length > 1;
+            }).length;
+
+            if (repetitiveCount > 0) {
+                integrityScore -= 5;
+                penaltyCount += 1;
+                addMissing('integrity', `Formulaic/Repetitive phrases detected (${repetitiveCount} cues).`, true);
+            } else {
+                findings.integrity.cues.push("Low repetition: Content appears editorially distinct.");
+            }
+
+            // AI Transparency Penalty (5 pts)
+            const aiDisclosed = AI_DISCLOSURE_KEYWORDS.some(k => lowerContent.includes(k));
+            if (!aiDisclosed && integrityScore < 20) {
+                integrityScore -= 5;
+                penaltyCount += 1;
+                addMissing('integrity', "**AI Transparency Missing:** No AI disclosure found (penalizing due to other quality issues).", true);
+            } else if (aiDisclosed) {
+                findings.integrity.cues.push("AI Use is **Disclosed** (Good transparency signal).");
+            }
+
+            // Thin Content Penalty (5 pts)
+            if (wordCount < MIN_WORD_COUNT) {
+                integrityScore -= 5;
+                penaltyCount += 1;
+                addMissing('integrity', `Content is too thin (Word Count: ${wordCount}). Target minimum is ${MIN_WORD_COUNT} words.`, true);
+            }
+            
+            // Zero Score Rule
+            if (penaltyCount >= 2) {
+                findings.integrity.cues.push("TOTAL FAILURE: Multiple severe compliance issues detected. Score reset to **0/20**.");
+                integrityScore = 0;
+            } else if (integrityScore < 0) {
+                integrityScore = 0;
+            }
+
+            findings.integrity.score = Math.min(INTEGRITY_MAX_SCORE, integrityScore);
+
+
+            // --- 4. Technical, Freshness & Link Strategy (Max 15 Pts) ---
+            let techScore = 0;
+
+            // Freshness Signals (5 pts)
+            const freshnessCount = FRESHNESS_KEYWORDS.filter(k => lowerContent.includes(k)).length;
+            if (freshnessCount > 0) {
+                findings.technical.cues.push(`Found Freshness Cues (${freshnessCount}).`);
+                techScore += 5;
+            } else {
+                addMissing('technical', "No clear **'Updated:'** date or **Freshness** signals.", true);
+            }
+
+            // Internal & External Link Strategy (5 pts) - Checking for placeholder text in <a> tags
+            const internalLinks = (htmlContent.match(/<a[^>]*>\[internal link/gi) || []).length;
+            const externalLinks = (htmlContent.match(/<a[^>]*>\[external link/gi) || []).length;
+
+            if (internalLinks >= 2) {
+                findings.technical.cues.push(`${internalLinks} **Internal Link** placeholders found.`);
+                techScore += 3;
+            } else {
+                addMissing('technical', "Need more **[Internal Link]** placeholders (Target >= 2).", false);
+            }
+
+            if (externalLinks >= 1) {
+                findings.technical.cues.push(`${externalLinks} **External Link** placeholders found.`);
+                techScore += 2;
+            } else {
+                addMissing('technical', "Missing **[External Link]** placeholders (Target >= 1).", true);
+            }
+
+            // Usability & Structure (5 pts) - Checking HTML headings
+            const h2Count = (htmlContent.match(/<h2/gi) || []).length;
+            const h3Count = (htmlContent.match(/<h3/gi) || []).length;
+
+            if (h2Count >= 3) {
+                findings.technical.cues.push(`Found ${h2Count} primary section headings (H2).`);
+                techScore += 3;
+            } else {
+                addMissing('technical', "Need more primary section headings (H2); content lacks clear hierarchy.", true);
+            }
+            
+            // Paragraph Length Check (Heuristic for mobile usability/readability)
+            // This is harder in HTML, so we check the plain text paragraphs length
+            const longParagraphs = paragraphs.filter(p => (p.match(/[.!?]+/g) || []).length > 7).length;
+            if (longParagraphs === 0 && paragraphs.length > 5) {
+                findings.technical.cues.push("Paragraphs are short and digestible (good mobile UX).");
+                techScore += 2;
+            } else if (longParagraphs > 0) {
+                addMissing('technical', `${longParagraphs} long paragraphs found (potential mobile/readability issue).`, true);
+                techScore += 1;
+            }
+
+            findings.technical.score = Math.min(TECH_MAX_SCORE, techScore);
+
+            // --- Final Score Aggregation ---
+            const totalScore = findings.eeat.score + findings.keyword.score + findings.integrity.score + findings.technical.score;
+
+            return { findings, totalScore, wordCount, paragraphs };
+        }
+
+        // --- UI Rendering Functions ---
+
+        function renderScoreCard(label, value, maxScore = null) {
+            let displayValue = value;
+            if (maxScore !== null) {
+                displayValue = `${value}/${maxScore}`;
+            }
+
+            let color = '';
+            if (maxScore !== null) {
+                const percentage = (value / maxScore) * 100;
+                if (percentage >= 80) color = 'text-green-600';
+                else if (percentage >= 50) color = 'text-yellow-600';
+                else color = 'text-red-600';
+            }
+
+            return `
+                <div class="score-card shadow-md p-4 bg-gray-50 border border-gray-200">
+                    <div class="score-value ${color}">${displayValue}</div>
+                    <div class="score-label text-gray-500">${label}</div>
+                </div>
+            `;
+        }
+
+        function renderDetailedSection(title, key, findings) {
+            const section = findings[key];
+            const max = section.max;
+            const score = section.score;
+
+            let html = `
+                <h3 class="text-xl font-semibold section-header mb-4">${title} (${score}/${max} pts)</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-700 mb-2">Positive Cues (Strengths)</h4>
+                        <div class="space-y-1">
+                            ${section.cues.map(cue => `<div class="positive-cue flex items-start"><span class="mr-2">✅</span>${cue}</div>`).join('') || '<div class="text-gray-500 italic">No major strengths found.</div>'}
+                        </div>
+                    </div>
+                    <div>
+                        <h4 class="text-lg font-medium text-gray-700 mb-2">Missing Signals (Improvement)</h4>
+                        <div class="space-y-1">
+                            ${section.missing.map(miss => `<div class="missing-signal flex items-start"><span class="mr-2">❌</span>${miss}</div>`).join('') || '<div class="text-gray-500 italic">All primary signals appear present.</div>'}
+                        </div>
+                    </div>
+                </div>
+            `;
+            return html;
+        }
+
+        // --- Main Controller ---
+
+        function runAnalysis() {
+            const keyword = document.getElementById('target-keyword').value.trim();
+            if (!keyword) {
+                alert("Please enter a Target Keyword/Phrase.");
+                return;
+            }
+
+            const { html, text } = getEditorContent();
+            if (!text || countWords(text) === 0) {
+                alert("Please add content to the editor before running the analysis.");
+                return;
+            }
+            
+            const { findings, totalScore, wordCount, paragraphs } = analyzeContent(html, text, keyword);
+            const { score: readingEaseScore, grade: readingEaseGrade } = calculateReadingEase(text);
+
+            document.getElementById('results-placeholder').classList.add('hidden');
+            document.getElementById('score-summary').classList.remove('hidden');
+
+            // 1. Render Score Cards
+            const scoreCardsHtml = `
+                ${renderScoreCard('TOTAL RANKING SCORE', totalScore, 100)}
+                ${renderScoreCard('WORD COUNT', wordCount)}
+                ${renderScoreCard('PARAGRAPHS', paragraphs.length)}
+                ${renderScoreCard('FLESCH EASE SCORE', readingEaseScore.toFixed(1))}
+                ${renderScoreCard('READABILITY GRADE', readingEaseGrade)}
+            `;
+            document.getElementById('score-cards-row').innerHTML = scoreCardsHtml;
+            
+            // 2. Render Priority List
+            const priorityList = document.getElementById('priority-list');
+            priorityList.innerHTML = '';
+            if (findings.priority_actions.length > 0) {
+                document.getElementById('priority-list').innerHTML = `
+                    <div class="text-red-600 font-bold mb-2">⚠️ Critical Fixes Recommended</div>
+                    ${[...new Set(findings.priority_actions)].map(action => `<div class="priority-item">${action}</div>`).join('')}
+                `;
+            } else {
+                priorityList.innerHTML = '<div class="text-green-600 font-bold p-2 bg-green-50 rounded-md">🎉 No high-priority missing signals detected.</div>';
+            }
+
+            // 3. Render Detailed Analysis Sections
+            let detailedHtml = '';
+            detailedHtml += renderDetailedSection('I. E-E-A-T & Utility (Incl. Semantic Coverage)', 'eeat', findings);
+            detailedHtml += renderDetailedSection('II. Keyword Relevance & Placement', 'keyword', findings);
+            detailedHtml += renderDetailedSection('III. Integrity & Compliance (SpamBrain)', 'integrity', findings);
+            detailedHtml += renderDetailedSection('IV. Technical, Freshness & Link Strategy', 'technical', findings);
+
+            document.getElementById('detailed-analysis').innerHTML = detailedHtml;
+        }
+
+    </script>
+</body>
+</html>
