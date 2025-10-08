@@ -27,7 +27,7 @@
 
     <div class="max-w-6xl mx-auto">
         <h1 class="text-3xl font-extrabold text-[#1A73E8] mb-6 border-b pb-2">WYSIWYG Content Quality Analyzer</h1>
-        <p class="text-gray-600 mb-6">Edit your content visually below. The analyzer will parse the HTML structure (e.g., 'h2' tags) to provide ranking insights.</p>
+        <p class="text-gray-600 mb-6">Edit your content visually below. The analyzer will parse the HTML structure (e.g., `<h2>` tags) to provide ranking insights.</p>
 
         <!-- Control Panel -->
         <div class="mb-6 p-4 bg-white rounded-xl shadow-lg flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
@@ -48,6 +48,14 @@
             <textarea id="content-editor" style="height: 400px;"></textarea>
         </div>
 
+        <!-- AUTHOR/CREATOR BIO SECTION (NEW) -->
+        <div class="mb-8">
+            <label class="block text-lg font-semibold text-gray-800 mb-2">2. Author/Creator Bio (E-E-A-T Signal)</label>
+            <textarea id="author-bio" rows="4" class="w-full p-3 border border-gray-300 rounded-md shadow-sm"
+                placeholder="Example: Dr. Jane Doe is a licensed medical doctor with 15 years of experience researching cardiovascular health. She is a certified senior analyst."></textarea>
+        </div>
+        <!-- END AUTHOR/CREATOR BIO SECTION -->
+
         <!-- Analysis Results -->
         <div id="analysis-results" class="bg-white p-6 rounded-xl shadow-lg border-t-4 border-[#4285F4]">
             <h2 class="text-2xl font-bold text-gray-800 mb-4">Analysis Report</h2>
@@ -66,30 +74,41 @@
                 <div id="detailed-analysis"></div>
             </div>
         </div>
+
+        <!-- Zoren Pescador Bio Section -->
+        <div class="mt-8 pt-4 border-t border-gray-300">
+            <h3 class="text-xl font-bold text-gray-800 mb-2">Creator Bio & Authority (Zoren Pescador)</h3>
+            <p class="text-gray-600">
+                Hi, I'm Zoren Pescador, from Cebu City, Philippines. For almost a decade, I’ve been diving deep into **SEO and digital marketing**, helping businesses navigate the ever-changing search engine landscape. My fascination lies at the intersection of **AI, machine learning, and technology**, and this website is my way of exploring those insights, combining professional experience with personal curiosity. Outside the digital realm, I'm a life enthusiast, from epic video games to training in **mixed martial arts (MMA)**, always reminding myself to strike a balance between the virtual and the real.
+            </p>
+            <p class="mt-2 text-sm text-gray-500">
+                Source: <a href="https://zorenthinksdigital.wordpress.com/about/" target="_blank" class="text-blue-500 hover:underline">zorenthinksdigital.wordpress.com/about/</a>
+            </p>
+        </div>
+        <!-- End Zoren Pescador Bio Section -->
     </div>
 
     <script>
-        // --- ANALYSIS CONSTANTS (Translated from Python) ---
+        // --- ANALYSIS CONSTANTS ---
         const EEAT_MAX_SCORE = 45;
         const KEYWORD_MAX_SCORE = 20;
         const INTEGRITY_MAX_SCORE = 20;
         const TECH_MAX_SCORE = 15;
 
         const EEAT_TRUST_KEYWORDS = [
-            "author:", "cited", "sources", "data suggests", "peer-reviewed", "methodology", "disclosure"
+            "cited", "sources", "data suggests", "peer-reviewed", "methodology", "disclosure"
         ];
         const EEAT_EXPERIENCE_KEYWORDS = [
             "i found that", "after using", "i discovered", "original analysis", "hands-on", "i tested", "first-hand"
         ];
-        const UTILITY_KEYWORDS = [
-            "step-by-step", "how to", "tutorial", "actionable", "comprehensive", "guide", "in-depth"
-        ];
         const SEMANTIC_CUES = [
             "alternatives", "pros and cons", "case study", "future of", "implications", "history of", "comparison"
         ];
+        const BIO_EXPERTISE_KEYWORDS = [ // Keywords for dedicated bio field
+            "phd", "master's", "decade", "years of experience", "licensed", "certified", "professor", "senior analyst", "md", "doctor"
+        ];
         
         const KEYWORD_DENSITY_TARGET = [0.5, 2.5]; 
-        const KEYWORD_PLACEMENT_LENGTH = 150; 
 
         const SPAMMY_KEYWORDS = [
             "buy now", "click here", "unbeatable deal", "limited time offer", "guaranteed", "cash back", "instant access"
@@ -108,9 +127,9 @@
         let editor;
 
         const PLACEHOLDER_HTML = `
-            <h2>The Essential Guide to Ranking Systems (Updated: 2024)</h2>
+            <h1>The Essential Guide to Ranking Systems (Updated: 2024)</h1>
             <p><strong>Author: Dr. Jenna Smith, Ph.D. in Computer Science</strong></p>
-            <h3>Understanding the Core Systems: Pros and Cons</h3>
+            <h2>Understanding the Core Systems: Pros and Cons</h2>
             <p>I found that after rigorous testing on over 100 pages, the single most critical factor is the application of the Experience (E) component of E-E-A-T. In my experience, content must demonstrate original insights.</p>
             <p>Why is this level of detail important? The reason is that Google’s Helpful Content System penalizes content that lacks original value. <a href="#">[Internal Link]</a></p>
             <h2>Building Trust and Authority</h2>
@@ -119,31 +138,44 @@
             <h2>Semantic Coverage: The Future of Ranking</h2>
             <p>A detailed comparison between the old ranking signals and the current, semantics-focused systems is critical for any writer. The implications of the SpamBrain system are far-reaching. This article is current as of 2024. <a href="#">[Internal Link]</a></p>
         `;
+        
+        // Initialize the bio placeholder
+        document.addEventListener('DOMContentLoaded', () => {
+             const bioElement = document.getElementById('author-bio');
+             if (bioElement) {
+                 bioElement.value = "Dr. Jane Doe is a licensed SEO expert with 15 years of experience analyzing Google's core ranking systems. She holds a PhD in Computational Linguistics.";
+             }
+        });
+
 
         tinymce.init({
             selector: '#content-editor',
-            api_key: 't19ko08ga6ci2uk2ityy6relkcseldfxoiepkuq5frjplt8a', // API Key Re-added
+            api_key: 't19ko08ga6ci2uk2ityy6relkcseldfxoiepkuq5frjplt8a', 
             height: 500,
             setup: function(ed) {
                 ed.on('init', function() {
                     ed.setContent(PLACEHOLDER_HTML);
                     editor = ed;
+                    // Ensure the textarea element is not read-only before TinyMCE initializes (defensive fix)
+                    const textarea = document.getElementById('content-editor');
+                    textarea.removeAttribute('readonly');
                 });
             },
             plugins: 'advlist autolink lists link charmap preview anchor searchreplace visualblocks code fullscreen insertdatetime table help wordcount',
             toolbar: 'undo redo | formatselect | bold italic backcolor | alignleft alignaligncenter alignright alignjustify | bullist numlist outdent indent | removeformat | help',
             branding: false,
             menubar: false,
-            readonly: false, 
+            readonly: false, // Ensure editor is writable
         });
 
         // --- CORE ANALYSIS LOGIC (HTML/JS) ---
 
         function getEditorContent() {
-            if (!editor) return { html: '', text: '' };
+            if (!editor) return { html: '', text: '', bioText: '' };
             const html = editor.getContent();
             const text = editor.getContent({ format: 'text' }).toLowerCase();
-            return { html, text };
+            const bioText = document.getElementById('author-bio').value.toLowerCase();
+            return { html, text, bioText };
         }
 
         function countWords(text) {
@@ -151,7 +183,6 @@
         }
         
         function calculateReadingEase(text) {
-            // Re-using the JS version of the calculation
             const sentences = text.match(/[.!?]+|$/g) || [];
             const words = text.match(/\b\w+\b/g) || [];
             let syllables = 0;
@@ -179,7 +210,7 @@
             return { score, grade };
         }
 
-        function analyzeContent(htmlContent, plainText, targetKeyword) {
+        function analyzeContent(htmlContent, plainText, bioText, targetKeyword) {
             const findings = {
                 priority_actions: [],
                 eeat: { score: 0, cues: [], missing: [], max: EEAT_MAX_SCORE },
@@ -199,9 +230,8 @@
 
             // --- 1. E-E-A-T & Utility Analysis (Max 45 Pts) ---
             let eeatScore = 0;
-            let eeatCues = 0;
             
-            // Experience & Trust (HTML Check: Look for Bold/Strong tags near cues)
+            // Experience & Trust (20 pts)
             const experienceFound = EEAT_EXPERIENCE_KEYWORDS.some(k => lowerContent.includes(k));
             const trustFound = EEAT_TRUST_KEYWORDS.some(k => lowerContent.includes(k));
             
@@ -219,7 +249,7 @@
                 addMissing('eeat', "No clear **trust signals** (e.g., 'cited sources').", true);
             }
 
-            // Semantic Coverage
+            // Semantic Coverage (15 pts)
             const semanticCount = SEMANTIC_CUES.filter(k => lowerContent.includes(k)).length;
             if (semanticCount >= 3) {
                 findings.eeat.cues.push(`Strong **Semantic Coverage** detected (${semanticCount} subtopics).`);
@@ -230,14 +260,29 @@
                 addMissing('eeat', "Missing strong **Semantic Coverage**. Explore related subtopics (e.g., 'Alternatives', 'Pros & Cons').", true);
             }
             
-            // Author/Expertise (Looking for explicit text in the first paragraph)
+            // Author/Expertise (10 pts total)
+            let authorExpertiseScore = 0;
+        
+            // Check 4a: Author declaration in content intro (2 pts)
             if (paragraphs.length > 0 && paragraphs[0].toLowerCase().includes('author:')) {
-                findings.eeat.cues.push("Found clear **Author/Expert** declaration in the introduction.");
-                eeatScore += 10;
+                findings.eeat.cues.push("Found clear **Author/Expert** declaration in the introduction (2/10 pts).");
+                authorExpertiseScore += 2;
             } else {
-                addMissing('eeat', "No visible **Author/Expert** declaration.", true);
+                addMissing('eeat', "No visible **Author/Expert** declaration in the main content introduction.", true);
+            }
+            
+            // Check 4b: Dedicated Bio Expertise (8 pts)
+            const bioSignalCount = BIO_EXPERTISE_KEYWORDS.filter(k => bioText.includes(k)).length;
+            if (bioSignalCount >= 2) {
+                findings.eeat.cues.push(`Strong professional **Bio Expertise** detected (${bioSignalCount} cues).`);
+                authorExpertiseScore += 8;
+            } else if (bioSignalCount >= 1) {
+                authorExpertiseScore += 4;
+            } else {
+                addMissing('eeat', "Missing strong **Bio Expertise** signals (e.g., credentials, professional experience) in the dedicated bio field.", true);
             }
 
+            eeatScore += authorExpertiseScore;
 
             findings.eeat.score = Math.min(EEAT_MAX_SCORE, eeatScore);
 
@@ -464,13 +509,13 @@
                 return;
             }
 
-            const { html, text } = getEditorContent();
+            const { html, text, bioText } = getEditorContent();
             if (!text || countWords(text) === 0) {
                 alert("Please add content to the editor before running the analysis.");
                 return;
             }
             
-            const { findings, totalScore, wordCount, paragraphs } = analyzeContent(html, text, keyword);
+            const { findings, totalScore, wordCount, paragraphs } = analyzeContent(html, text, bioText, keyword);
             const { score: readingEaseScore, grade: readingEaseGrade } = calculateReadingEase(text);
 
             document.getElementById('results-placeholder').classList.add('hidden');
